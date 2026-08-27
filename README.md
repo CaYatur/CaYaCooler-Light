@@ -4,188 +4,186 @@
 [![Platform: Windows 11](https://img.shields.io/badge/Platform-Windows%2011-0078D6)]()
 [![MCU: ESP32-S2%2FS3](https://img.shields.io/badge/MCU-ESP32--S2%20%2F%20S3-E7352C)]()
 
-ESP32-S2/S3 tabanlı akıllı soğutucu denetleyici — Windows 11 **Dynamic Lighting** (HID LampArray) desteği, 2× 4-pin PWM fan kontrolü/RPM okuma ve bir C# masaüstü uygulamasıyla CPU/GPU sıcaklığına, fan hızına ve müziğe tepki veren aydınlatma sağlar.
+**English | [Türkçe](README.tr.md)**
 
-> An ESP32-S2/S3 smart cooler controller: native Windows 11 **Dynamic Lighting** (HID LampArray) support, dual 4-pin PWM fan control with RPM readback, and a companion C# Windows app that drives temperature-, rainbow- and music-reactive lighting. See below for the (Turkish) build guide, wiring, and protocol reference — issues/PRs in English are welcome too.
+An ESP32-S2/S3-based smart cooler controller:
+
+- Native Windows 11 **Dynamic Lighting** (HID LampArray) — device name **CaYaLight**
+- **2× 4-pin PWM fan** control (25 kHz) with tachometer **RPM** readback
+- **Companion PC app** (system tray + GUI): CPU/GPU temperature, fan RPM/mode, lighting mode, music-reactive lighting
+- **Pure HID** device: both Dynamic Lighting (LampArray) and PC communication (vendor HID reports) go over the same HID interface. **No CDC/serial** (enabling CDC made Windows stop recognizing the LampArray device).
 
 ```
 firmware/CaYaCooler/CaYaCooler.ino  -> ESP32-S2/S3 firmware (HID-only)
-pc-app/                             -> C# .NET 8 WinForms uygulaması (CaYaControl)
-CaYaLight/CaYaLight.ino             -> sadece Dynamic Lighting (test/sade sürüm)
+pc-app/                             -> C# .NET 8 WinForms app (CaYaControl)
+CaYaLight/CaYaLight.ino             -> Dynamic Lighting only (simplified test build)
 ```
 
-- **Windows 11 Dynamic Lighting** (HID LampArray) — cihaz adı **CaYaLight**
-- **2× 4-pin PWM fan** kontrolü (25 kHz) + tachometer ile **RPM** okuma
-- **PC uygulaması** (sistem tepsisi + GUI): CPU/GPU sıcaklığı, fan RPM/mod, ışık modu, müzik moduyla ses reaktif aydınlatma
-- **Saf HID** cihaz: hem Dynamic Lighting (LampArray) hem PC haberleşmesi (vendor HID raporları) aynı HID arabiriminden. **CDC/seri yok** (CDC eklenince Windows LampArray'i tanımıyordu).
-
-> **Ayarlar** uygulama klasöründeki `cayacontrol.settings.json` dosyasına otomatik kaydedilir (ışık modu, fan, parlaklık, tüm müzik ayarları, seçili GPU).
+> **Settings** are auto-saved to `cayacontrol.settings.json` next to the app executable (lighting mode, fan, brightness, all music settings, selected GPU).
 
 ---
 
-## 0) Kullanılan donanım (referans)
+## 0) Hardware used (reference)
 
-Bu projede test edilen parçalar — birebir aynısını kullanmak zorunda değilsin, eşdeğerleri de çalışır:
+Parts tested in this project — you don't need the exact same ones, equivalents work fine:
 
-| Parça | Not |
+| Part | Note |
 |---|---|
-| ESP32-S2 Mini geliştirme kartı | Native USB OTG gerekli — orijinal ESP32 (S2/S3 öneki olmayan) **desteklenmez**. ESP32-S3 kartlarda da aynı firmware sorunsuz çalışır. |
-| 2× 4-pin PWM kasa fanı (12V) | Standart Intel 4-pin pinout (GND / +12V / Tach / PWM). |
-| WS2812/NeoPixel LED şeridi (30 LED) | `LED_COUNT` firmware'de değiştirilebilir. |
-| Logic-level N-kanal MOSFET + 100Ω gate direnci + 100kΩ pull-down direnci | Aşağıdaki "PC kapalıyken fanı kes" devresi için. |
+| ESP32-S2 Mini dev board | Native USB OTG required — the original ESP32 (without an S2/S3 suffix) is **not supported**. The same firmware also runs unmodified on ESP32-S3 boards. |
+| 2× 4-pin PWM case fan (12V) | Standard Intel 4-pin pinout (GND / +12V / Tach / PWM). |
+| WS2812/NeoPixel LED strip (30 LEDs) | `LED_COUNT` is adjustable in firmware. |
+| Logic-level N-channel MOSFET + 100Ω gate resistor + 100kΩ pull-down resistor | For the "cut fan power when the PC is off" circuit below. |
 
 ---
 
-## 1) Donanım / Kablolama
+## 1) Hardware / Wiring
 
-### 4-pin PWM fan konektörü (standart pinout)
+### 4-pin PWM fan connector (standard pinout)
 
-| Pin | Kablo | İşlev | Bağlantı |
-|-----|-------|-------|----------|
-| 1 | Siyah | GND | 12V kaynak GND **+** ESP32 GND (ortak şart) |
-| 2 | Sarı  | +12V | 12V kaynak + |
-| 3 | Yeşil | Tach (RPM) | ESP32 tach pini, 3.3V'a 10k pull-up |
-| 4 | Mavi  | PWM (hız) | ESP32 PWM pini (3.3V çalışır; 5V level-shifter ideal) |
+| Pin | Wire | Function | Connects to |
+|-----|------|----------|-------------|
+| 1 | Black | GND | 12V supply GND **+** ESP32 GND (common ground required) |
+| 2 | Yellow | +12V | 12V supply + |
+| 3 | Green | Tach (RPM) | ESP32 tach pin, 10k pull-up to 3.3V |
+| 4 | Blue | PWM (speed) | ESP32 PWM pin (3.3V works; a 5V level-shifter is ideal) |
 
-### ESP32-S2/S3 pin haritası
+### ESP32-S2/S3 pin map
 
-| İşlev | GPIO |
-|-------|------|
+| Function | GPIO |
+|----------|------|
 | LED DIN (WS2812) | 4 |
 | Fan 1 PWM | 5 |
 | Fan 2 PWM | 6 |
 | Fan 1 Tach | 7 |
 | Fan 2 Tach | 15 |
-| Fan güç MOSFET gate (FAN_EN, opsiyonel) | 16 |
+| Fan power MOSFET gate (FAN_EN, optional) | 16 |
 
-> Kart pin çıkışların farklıysa (özellikle GPIO16, klon kartlarda flash/PSRAM için ayrılmış olabilir) yukarıdaki numaraları kendi kartının pinout diyagramına göre firmware'de güncelle.
+> If your board's pinout differs (GPIO16 in particular may be reserved for flash/PSRAM on some clone boards), update the numbers in firmware to match your specific board's pinout diagram.
 
-### Önemli notlar
+### Important notes
 
-- **Fanları USB'den besleme.** Ayrı 12V kaynak (veya PC PSU Molex: sarı=12V, siyah=GND). 12V GND ile ESP32 GND **ortak** olmalı.
-- Tach hatları açık-kollektördür; kod `INPUT_PULLUP` kullanır ama harici 10k pull-up daha güvenilirdir.
-- LED şeridi: DIN'e ~330Ω seri direnç; 30 LED tam beyazda ~1.8A çeker → 5V'u ayrı besle, GND ortak. 3.3V→5V level shifter DIN'de kararlılığı artırır.
-- İki fanı aynı hızda sürmek yeterliyse PWM hatlarını tek GPIO'ya paralelleyebilirsin; ama ayrı RPM için ayrı tach gerekir.
+- **Don't power the fans from USB.** Use a separate 12V supply (or a PC PSU Molex connector: yellow=12V, black=GND). The 12V GND and ESP32 GND **must be common**.
+- Tach lines are open-collector; the code uses `INPUT_PULLUP`, but an external 10k pull-up is more reliable.
+- LED strip: put a ~330Ω series resistor on DIN; 30 LEDs at full white draw ~1.8A → power the 5V rail separately, keep GND common. A 3.3V→5V level shifter on DIN improves stability.
+- If driving both fans at the same speed is fine, you can parallel the PWM lines to a single GPIO — but separate RPM readback still needs separate tach lines.
 
-### "PC kapalıyken fanı kes" — MOSFET güç anahtarı
+### "Cut the fan when the PC is off" — MOSFET power switch
 
-Fanların 12V hattı, gate'i ESP32'ye bağlı bir **N-kanal logic-level MOSFET** üzerinden anahtarlanır. Güvenlik tamamen **donanımsal**: ESP32 sadece PC/anakart USB güç aldığı sürece çalışır, dolayısıyla PC kapanınca ESP32 de kapanır → gate'teki **100kΩ pull-down direnç** gate'i LOW'a çeker → MOSFET kesime gider → fan **her koşulda** kapanır (firmware çökse veya hiç yüklenmese bile).
+The fans' 12V rail is switched through an **N-channel logic-level MOSFET** whose gate is driven from the ESP32. Safety is entirely **hardware-based**: the ESP32 only runs while the PC/motherboard is supplying USB power, so when the PC turns off, the ESP32 turns off too → the gate's **100kΩ pull-down resistor** pulls the gate LOW → the MOSFET turns off → the fan is cut **in every scenario** (even if the firmware crashes or never boots).
 
 ```
-                +12V (ayrı besleme) ──────────────┬─────────────┐
-                                                   │             │
-                                              Fan 1 || Fan 2     │
-                                             (4-pin PWM, paralel)│
-                                                   │             │
-                     ESP32 GPIO5 ── PWM ───────────┤             │
-                     ESP32 GPIO7 ── tach ──────────┤             │
-                                                   │             │
-                                              fan(-) / GND        │
-                                                   │             │
-                                                   ▼             │
-                                          ┌─────────────────┐    │
-                     ESP32 GPIO16 ──100Ω──┤ G   N-MOSFET  D ├────┘
-                                          │                 │
-                                          │        S        │
-                                          └────────┬────────┘
-                                                   │
-                    GPIO16 ──100kΩ pull-down──┐    │
-                                               ├────┘
-                                              GND (ESP32 + 12V kaynak ortak)
+                +12V (separate supply) ────────────┬─────────────┐
+                                                    │             │
+                                              Fan 1 || Fan 2      │
+                                             (4-pin PWM, parallel)│
+                                                    │             │
+                     ESP32 GPIO5 ── PWM ────────────┤             │
+                     ESP32 GPIO7 ── tach ───────────┤             │
+                                                    │             │
+                                              fan(-) / GND         │
+                                                    │             │
+                                                    ▼             │
+                                           ┌─────────────────┐    │
+                     ESP32 GPIO16 ──100Ω───┤ G   N-MOSFET  D ├────┘
+                                           │                 │
+                                           │        S        │
+                                           └────────┬────────┘
+                                                    │
+                    GPIO16 ──100kΩ pull-down──┐     │
+                                               ├─────┘
+                                              GND (ESP32 + 12V supply, common)
 ```
 
-- Gate'e giden 100Ω direnç MOSFET anahtarlama darbesini sınırlar (isteğe bağlı ama önerilir).
-- 100kΩ pull-down, ESP32 pini yüksek empedanslı (reset/boot anı, güç yokken) olduğunda gate'i kesin LOW'da tutar — **fan varsayılan olarak kapalı**, sadece ESP32 açıkça HIGH yazınca açılır.
-- Firmware, `setup()` içinde bu pini (`FAN_EN_PIN`, varsayılan GPIO16) açılışta HIGH yapar; devreyi kullanmıyorsan pini boş bırakabilirsin, koda dokunmana gerek yok.
-- Fan(-) ucunu doğrudan MOSFET drain'ine değil, ortak GND'ye bağlayıp MOSFET'i **12V tarafında** (high-side, P-MOSFET ile) anahtarlamak istersen devreyi buna göre uyarlaman gerekir; yukarıdaki low-side N-MOSFET devresi en basit ve yaygın çözümdür.
+- The 100Ω gate resistor limits the MOSFET's switching inrush (optional but recommended).
+- The 100kΩ pull-down holds the gate firmly LOW whenever the ESP32 pin is high-impedance (during reset/boot, or with no power at all) — **the fan defaults to off**, and only turns on once the ESP32 explicitly drives the pin HIGH.
+- On boot, the firmware sets this pin (`FAN_EN_PIN`, default GPIO16) HIGH in `setup()`. If you're not using this circuit, you can leave the pin unconnected — no code changes needed.
+- If you'd rather switch the fan on the 12V side (high-side, with a P-MOSFET) instead of tying fan(-) to the low-side N-MOSFET drain as shown, you'll need to adapt the circuit accordingly — the low-side N-MOSFET setup above is the simplest and most common approach.
 
 ---
 
 ## 2) Firmware (Arduino IDE)
 
-1. **Boards Manager** → "esp32" by Espressif, **sürüm 3.x** (ledcAttach API gerekir).
+1. **Boards Manager** → "esp32" by Espressif, **version 3.x** (the `ledcAttach` API is required).
 2. **Library Manager** → "Adafruit NeoPixel".
-3. Kart: ESP32-S2 veya ESP32-S3 modülün (ikisi de native USB OTG'ye sahip, aynı firmware çalışır). Ayarlar:
+3. Board: your ESP32-S2 or ESP32-S3 module (both have native USB OTG, same firmware runs on either). Settings:
    - **USB Mode: USB-OTG (TinyUSB)**
-   - **USB CDC On Boot: Disabled**  ← şart (CDC açıkken Dynamic Lighting cihazı görmüyor)
-4. `firmware/CaYaCooler/CaYaCooler.ino` → Derle/Yükle.
+   - **USB CDC On Boot: Disabled**  ← required (with CDC enabled, Windows won't see the Dynamic Lighting device)
+4. `firmware/CaYaCooler/CaYaCooler.ino` → Compile/Upload.
 
-> Daha önce bozuk descriptor ile taktıysan, Aygıt Yöneticisi'nden cihazı kaldırıp yeniden tak (Windows USB descriptor önbelleğini temizlemek için).
+> If you previously plugged the device in with a broken descriptor, remove it from Device Manager and re-plug it (to clear Windows' USB descriptor cache).
 
 ---
 
-## 3) PC Uygulaması (CaYaControl)
+## 3) PC App (CaYaControl)
 
-Gereksinim: **.NET 8 SDK** (veya üzeri). NuGet paketleri otomatik iner.
+Requires: **.NET 8 SDK** (or later). NuGet packages restore automatically.
 
 ```powershell
 cd pc-app
 dotnet build -c Release
-# Çalıştır (yönetici hakkı ister - CPU sıcaklığı için gerekli):
+# Run (requires admin rights - needed for CPU temperature access):
 .\bin\Release\net8.0-windows\CaYaControl.exe
 ```
 
-Tek dosya, taşınabilir sürüm:
+Single-file, portable build:
 
 ```powershell
 dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
-# çıktı: pc-app\bin\Release\net8.0-windows\win-x64\publish\CaYaControl.exe
+# output: pc-app\bin\Release\net8.0-windows\win-x64\publish\CaYaControl.exe
 ```
 
-Hazır derlenmiş sürümler için **[Releases](../../releases)** sayfasına bakabilirsin.
+Prebuilt binaries are available on the **[Releases](../../releases)** page.
 
-### Kullanım
+### Usage
 
-- Uygulama açılınca cihazı **HID üzerinden** otomatik bulur (VID 0x303A / PID 0x4343, vendor usage 0xFF00). COM portu yok. Bulamazsa **Yeniden Bağlan**.
-- **CPU / GPU** sıcaklığı kartlarda; sağda **GPU seçici** (NVIDIA öncelikli, tüm GPU'lar listede). **Fan RPM** ve **güç %** cihazdan canlı gelir.
-- **Işık modu**: Kapalı / Sabit Renk / Sıcaklık / Gökkuşağı / **Müzik (ses)** / **Windows Dynamic Lighting**.
-  - "Windows Dynamic Lighting" dışında bir mod seçince uygulama aydınlatmayı devralır.
-  - **Müzik Ayarları...**: görsel mod (spektrum/tek renk), renk şeması (gökkuşağı/frekans→renk/sabit/bas-orta-tiz/iki renk geçişi), spektrum stili (aynalı/merkezden), parlaklık, hassasiyet/AGC, bas vurgusu, tepki/sönme, gamma, **gürültü kapısı** (sessizliği es geç), **frekans aralığı** (min/max Hz), **boşta davranışı** (kapalı/sabit/nefes/sabit kal/yavaş gökkuşağı).
-- **Fan**: Otomatik (sıcaklık eğrisi) veya Manuel (kaydırma çubuğu).
-- **Windows ile başlat**: "en yüksek ayrıcalık"lı bir Zamanlanmış Görev kurar.
-- Pencereyi kapatmak uygulamayı **tepsiye** küçültür; çıkmak için tepsi menüsü → Çıkış.
-- Tüm ayarlar `cayacontrol.settings.json`'a otomatik kaydedilir.
+- On launch, the app automatically finds the device over **HID** (VID 0x303A / PID 0x4343, vendor usage 0xFF00). No COM port. Use **Reconnect** if it can't find it.
+- **CPU / GPU** temperature cards; a **GPU selector** on the right (NVIDIA prioritized, all GPUs listed). **Fan RPM** and **power %** come live from the device.
+- **Lighting mode**: Off / Static Color / Temperature / Rainbow / **Music (audio-reactive)** / **Windows Dynamic Lighting**.
+  - Choosing any mode other than "Windows Dynamic Lighting" makes the app take over the lighting.
+  - **Music Settings...**: visual mode (spectrum/single color), color scheme (rainbow / frequency-to-color / static / bass-mid-treble / two-color gradient), spectrum style (mirrored/from-center), brightness, sensitivity/AGC, bass emphasis, attack/decay, gamma, **noise gate** (skip silence), **frequency range** (min/max Hz), **idle behavior** (off / static / breathing / hold-last / slow rainbow).
+- **Fan**: Automatic (temperature curve) or Manual (slider).
+- **Start with Windows**: sets up a highest-privilege Scheduled Task.
+- Closing the window minimizes the app to the **tray**; use the tray menu → Exit to quit.
+- All settings auto-save to `cayacontrol.settings.json`.
 
 ---
 
-## 4) HID protokol (referans)
+## 4) HID protocol (reference)
 
-Haberleşme vendor HID raporlarıyla (CDC/seri yok):
+Communication uses vendor HID reports (no CDC/serial):
 
-**PC → cihaz** — Feature raporu `0x10` (48 bayt): `[cmd][payload...]`
+**PC → device** — Feature report `0x10` (48 bytes): `[cmd][payload...]`
 ```
 0x01 TEMP   cpu, gpu
-0x02 MODE   mod (0..5)
+0x02 MODE   mode (0..5)
 0x03 COLOR  r, g, b
-0x04 FAN    mod(0=oto/1=manuel), duty%
+0x04 FAN    mode(0=auto/1=manual), duty%
 0x05 BRIGHT 0..255
-0x06 FRAME  parçalı: [baslangic][adet][RGB...] (15 LED'lik parçalar halinde)
+0x06 FRAME  chunked: [start][count][RGB...] (sent in 15-LED chunks)
 ```
 
-**cihaz → PC** — Input raporu `0x11` (16 bayt):
+**device → PC** — Input report `0x11` (16 bytes):
 ```
 cpu, gpu, rpm1(LE), rpm2(LE), duty, fanmode, mode, host, fanManualDuty, brightness, staticColor(r,g,b)
 ```
 
 ---
 
-## 5) Güvenlik / failsafe
+## 5) Safety / failsafe
 
-- PC verisi 5 sn gelmezse fanlar otomatik **%80**'e çıkar (düşüğe değil).
-- Fan eğrisi histerezisli (EMA) ve yumuşak geçişli — ani RPM sıçraması yok.
-- MOSFET güç anahtarı sayesinde PC/ESP32 kapalıyken fanlar **donanımsal olarak** kesilir (bkz. [§1 "PC kapalıyken fanı kes"](#pc-kapalıyken-fanı-kes--mosfet-güç-anahtarı)).
-- `LampArrayKind = Peripheral (4)` → Dynamic Lighting'de renkli ızgara ikonu. Değiştirmek için firmware'deki `k` değeri.
+- If no PC data arrives for 5s, fans automatically ramp to **80%** (fails high, not low).
+- The fan curve is hysteretic (EMA) with a smooth ramp — no sudden RPM jumps.
+- Thanks to the MOSFET power switch, fans are cut **at the hardware level** whenever the PC/ESP32 is off (see [§1 "Cut the fan when the PC is off"](#cut-the-fan-when-the-pc-is-off--mosfet-power-switch)).
+- `LampArrayKind = Peripheral (4)` → gives a colored grid icon in Dynamic Lighting. Change the `k` value in firmware to alter it.
 
 ---
 
-## Katkı / Contributing
+## Contributing
 
-Issue ve PR'lar açık — özellikle farklı ESP32-S2/S3 kart varyantlarıyla test sonuçları, yeni ışık modları veya hata düzeltmeleri memnuniyetle karşılanır.
+Issues and PRs are welcome — especially test results on other ESP32-S2/S3 board variants, new lighting modes, or fixes.
 
-Bug reports and pull requests are welcome — especially test results on other ESP32-S2/S3 board variants, new lighting modes, or fixes.
-
-## Lisans / License
+## License
 
 [MIT](LICENSE) © 2026 Çağan Turgut (CaYatur)
 
-Bu proje şu üçüncü taraf kütüphaneleri kullanır (kendi lisanslarıyla, ayrı NuGet/Arduino paketleri olarak): [LibreHardwareMonitorLib](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) (MPL-2.0), [NAudio](https://github.com/naudio/NAudio) (MIT), [HidSharp](https://github.com/IntergatedCircuits/HidSharp) (Apache-2.0/MIT), [Adafruit NeoPixel](https://github.com/adafruit/Adafruit_NeoPixel) (LGPL-3.0).
+This project uses the following third-party libraries (under their own licenses, as separate NuGet/Arduino packages): [LibreHardwareMonitorLib](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) (MPL-2.0), [NAudio](https://github.com/naudio/NAudio) (MIT), [HidSharp](https://github.com/IntergatedCircuits/HidSharp) (Apache-2.0/MIT), [Adafruit NeoPixel](https://github.com/adafruit/Adafruit_NeoPixel) (LGPL-3.0).
