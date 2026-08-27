@@ -1,0 +1,20 @@
+# --- .NET / pc-app ---
+pc-app/bin/
+pc-app/obj/
+*.user
+*.suo
+
+# --- Arduino IDE build artifacts ---
+firmware/**/build/
+*.arduino.build/
+
+# --- User settings saved next to the built exe ---
+cayacontrol.settings.json
+
+# --- OS / editor cruft ---
+.vs/
+.vscode/
+*.swp
+Thumbs.db
+Desktop.ini
+.DS_Store

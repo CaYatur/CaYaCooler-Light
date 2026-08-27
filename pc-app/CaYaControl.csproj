@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>appicon.ico</ApplicationIcon>
+    <AssemblyName>CaYaControl</AssemblyName>
+    <Version>1.0.0</Version>
+    <!-- Tek dosya yayin: bkz. README (dotnet publish) -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Form + tepsi ikonu calisma aninda buradan yuklenir (gomulu kaynak).
+         LogicalName sabit -> koddaki ad ile kesin eslesir (RootNamespace'e bagli degil). -->
+    <EmbeddedResource Include="appicon.ico">
+      <LogicalName>CaYaControl.appicon.ico</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- CPU + GPU sicakligi (yonetici hakki + WinRing0 surucusu gerektirir) -->
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.4" />
+    <!-- Sistem sesi yakalama (muzik modu icin) -->
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <!-- Cihaz ile HID haberlesme (CDC/seri yerine) -->
+    <PackageReference Include="HidSharp" Version="2.1.0" />
+  </ItemGroup>
+
+</Project>
